@@ -3,6 +3,7 @@ from typing import Tuple, Dict, Union
 from pytorch_lightning import LightningModule
 import torch
 import kornia
+import numpy as np
 
 from tvcalib.utils.data_distr import FeatureScalerZScore
 
@@ -256,6 +257,21 @@ class SNProjectiveCamera:
 
     def __len__(self):
         return self.pseudo_batch_size  # e.g. self.intrinsics.shape[0]
+    
+    def get_transformation_to_camera(self):
+        """
+        Get transformation matrix from world coordinates to camera coordinates.
+        """
+        K = self.intrinsics_raster.cpu().numpy().squeeze()
+        t = self.position.cpu().numpy().squeeze()
+        R = self.rotation.cpu().numpy().squeeze()
+
+        T = np.block([np.eye(3), -t.reshape(-1, 1)])
+
+        return K @ R @ T
+    
+    def get_transformation_to_world(self):
+        return np.linalg.inv(self.get_transformation_to_camera())
 
     def project_point2pixel(self, points3d: torch.tensor, lens_distortion: bool) -> torch.tensor:
         """Project world coordinates to pixel coordinates.
@@ -274,6 +290,7 @@ class SNProjectiveCamera:
         rotated_point = rotated_point / dist_point2cam  # (B, 3, N) / (B, 1, N) -> (B, 3, N)
 
         projected_points = self.intrinsics_raster @ rotated_point  # (B, 3, N)
+        print("projected_points", projected_points)
         # transpose vs view? here
         projected_points = projected_points.transpose(-1, -2)  # cannot use view()
         projected_points = kornia.geometry.convert_points_from_homogeneous(projected_points)
