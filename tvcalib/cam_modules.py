@@ -85,7 +85,11 @@ class CameraParameterWLensDistDictZScore(LightningModule):
     def forward(self):
         phi_dict = {}
         for k, param in self.param_dict.items():
-            phi_dict[k] = self.feature_scaler[k](param)
+            phi_dict[k] = torch.clamp(
+                self.feature_scaler[k](param),
+                self.cam_distr[k]["minmax"][0],
+                self.cam_distr[k]["minmax"][1],
+                )
 
         if self.dist_distr is None:
             return phi_dict, None
