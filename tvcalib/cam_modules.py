@@ -264,18 +264,30 @@ class SNProjectiveCamera:
     
     def get_transformation_to_camera(self):
         """
-        Get transformation matrix from world coordinates to camera coordinates.
+        Get transformation matrix and translation vector from pitch frame to camera frame.
+        :return: transformation matrix and translation vector
         """
         K = self.intrinsics_raster.cpu().numpy().squeeze()
         t = self.position.cpu().numpy().squeeze()
         R = self.rotation.cpu().numpy().squeeze()
 
-        T = np.block([np.eye(3), -t.reshape(-1, 1)])
+        return K @ R, t
 
-        return K @ R @ T
-    
-    def get_transformation_to_world(self):
-        return np.linalg.inv(self.get_transformation_to_camera())
+    def get_pitch_coordinates(self, pix):
+        """
+        Get pitch coordinates from pixel coordinates.
+        :param pix: pixel coordinates of shape (1, 2)
+        :return: pitch coordinates of shape (1, 2)
+        """
+        pix = np.hstack((pix, [1]))
+
+        A, t = self.get_transformation_to_camera()
+
+        pitch_frame_cam_pix = np.linalg.inv(A) @ pix + t
+        vec = pitch_frame_cam_pix - t
+        q = -t[2] / vec[2]
+
+        return (vec * q + t)[:2]
 
     def project_point2pixel(self, points3d: torch.tensor, lens_distortion: bool) -> torch.tensor:
         """Project world coordinates to pixel coordinates.
@@ -294,7 +306,6 @@ class SNProjectiveCamera:
         rotated_point = rotated_point / dist_point2cam  # (B, 3, N) / (B, 1, N) -> (B, 3, N)
 
         projected_points = self.intrinsics_raster @ rotated_point  # (B, 3, N)
-        print("projected_points", projected_points)
         # transpose vs view? here
         projected_points = projected_points.transpose(-1, -2)  # cannot use view()
         projected_points = kornia.geometry.convert_points_from_homogeneous(projected_points)
