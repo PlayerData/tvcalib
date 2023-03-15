@@ -3,6 +3,8 @@ from argparse import Namespace
 from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
+import matplotlib.pyplot as plt
+import torchvision.transforms as T
 
 import numpy as np
 import torch
@@ -13,7 +15,9 @@ from SoccerNet.Evaluation.utils_calibration import SoccerPitch
 from random import choices
 import string
 import os
+import shutil
 import cv2
+from tvcalib.cam_modules import SNProjectiveCamera
 
 
 from tvcalib.module import TVCalibModule
@@ -24,8 +28,72 @@ from tvcalib.utils.io import detach_dict, tensor2list
 from tvcalib.utils.objects_3d import SoccerPitchLineCircleSegments, SoccerPitchSNCircleCentralSplit
 from tvcalib.inference import InferenceDatasetCalibration, InferenceDatasetSegmentation, InferenceSegmentationModel
 from tvcalib.inference import get_camera_from_per_sample_output
+from tvcalib.utils import visualization_mpl_min as viz
 
-def run_inference_on_folder(folder_path, model_path = "data/segment_localization/train_59.pt"):
+def debug(df, args, object3dcpu):
+    sample = df.iloc[0]
+
+    image_id = Path(sample.image_id).stem
+    print(f"{image_id=}")
+    image = Image.open(args.images_path / sample.image_id).convert("RGB")
+    image = T.functional.to_tensor(image)
+
+    cam = get_camera_from_per_sample_output(sample, args.lens_dist)
+
+    f"aov_deg={torch.rad2deg(cam.phi_dict['aov'])}, t={torch.stack([cam.phi_dict[k] for k in ['c_x', 'c_y', 'c_z']], dim=-1)}, pan_deg={torch.rad2deg(cam.phi_dict['pan'])} tilt_deg={torch.rad2deg(cam.phi_dict['tilt'])} roll_deg={torch.rad2deg(cam.phi_dict['roll'])}"
+
+    print(cam, cam.str_lens_distortion_coeff(b=0) if args.lens_dist else "")
+
+
+    points_line, points_circle = sample["points_line"], sample["points_circle"]
+
+    if args.lens_dist:
+        # we visualize annotated points and image after undistortion
+        image = cam.undistort_images(image.unsqueeze(0).unsqueeze(0)).squeeze()
+        # print(points_line.shape) # expected: (1, 1, 3, S, N)
+        points_line = SNProjectiveCamera.static_undistort_points(points_line.unsqueeze(0).unsqueeze(0), cam).squeeze()
+        points_circle = SNProjectiveCamera.static_undistort_points(points_circle.unsqueeze(0).unsqueeze(0), cam).squeeze()
+    else:
+        psi = None
+
+    fig, ax = viz.init_figure(args.image_width, args.image_height)
+    ax = viz.draw_image(ax, image)
+
+    ax = viz.draw_reprojection(ax, object3dcpu, cam)
+    ax = viz.draw_selected_points(
+        ax,
+        object3dcpu,
+        points_line,
+        points_circle,
+        kwargs_outer={
+            "zorder": 1000,
+            "rasterized": False,
+            "s": 500,
+            "alpha": 0.3,
+            "facecolor": "none",
+            "linewidths": 3,
+        },
+        kwargs_inner={
+            "zorder": 1000,
+            "rasterized": False,
+            "s": 50,
+            "marker": ".",
+            "color": "k",
+            "linewidths": 4.0,
+        },
+    )
+    dpi = 50
+
+    ax.set_xlim(0, args.image_width)
+    ax.set_ylim(args.image_height, 0)
+
+    plt.savefig(args.output_dir / f"{image_id}.pdf", dpi=dpi)
+    plt.savefig(args.output_dir / f"{image_id}.svg", dpi=dpi)
+    plt.savefig(args.output_dir / f"{image_id}.png", dpi=dpi)
+
+def run_inference_on_folder(folder_path, model_path = "data/segment_localization/train_59.pt", image_width = 1280, image_height = 720, debug_flag = False):
+    print("image_width:", image_width)
+    print("image_height:", image_height)
     args = Namespace(
         images_path=Path(folder_path),
         output_dir=Path("tmp"),
@@ -34,16 +102,20 @@ def run_inference_on_folder(folder_path, model_path = "data/segment_localization
         nworkers=12,
         batch_size_seg=16,
         batch_size_calib=256,
-        image_width=1280,
-        image_height=720,
+        imaobject3dcpuge_height=image_width,
         optim_steps=2000,
         lens_dist=False,
-        write_masks=False
+        write_masks=False,
+        image_height=image_height,
+        image_width=image_width
     )
     device = "cuda" if args.gpu and torch.cuda.is_available() else "cpu"
 
     object3d = SoccerPitchLineCircleSegments(
         device=device, base_field=SoccerPitchSNCircleCentralSplit()
+    )
+    object3dcpu = SoccerPitchLineCircleSegments(
+        device="cpu", base_field=SoccerPitchSNCircleCentralSplit()
     )
 
     lines_palette = [0, 0, 0]
@@ -139,17 +211,22 @@ def run_inference_on_folder(folder_path, model_path = "data/segment_localization
     sample = df.iloc[0]
     cam = get_camera_from_per_sample_output(sample, args.lens_dist)
 
+    if debug_flag:
+        debug(df, args, object3dcpu)
+
     return cam, output_dict
 
-def run_inference_on_image(image, model_path = "data/segment_localization/train_59.pt"):
+def run_inference_on_image(image, model_path = "data/segment_localization/train_59.pt", debug = False):
     folder_name = 'temp_'+''.join(choices(
         string.ascii_uppercase + string.digits, k=5))
+    
+    shutil.rmtree(folder_name, ignore_errors=True)
     
     os.mkdir(folder_name)
     image_path = os.path.join(folder_name, 'image.jpg')
     cv2.imwrite(image_path, image)
     
-    res = run_inference_on_folder(folder_name, model_path)
+    res = run_inference_on_folder(folder_name, model_path, image.shape[1], image.shape[0], debug_flag = debug)
 
     os.remove(image_path)
     os.rmdir(folder_name)
