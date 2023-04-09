@@ -283,11 +283,15 @@ class SNProjectiveCamera:
 
         A, t = self.get_transformation_to_camera()
 
-        pitch_frame_cam_pix = np.linalg.inv(A) @ pix + t
-        vec = pitch_frame_cam_pix - t
+        pitch_frame_cam_pix = np.linalg.inv(A) @ pix
+        vec = pitch_frame_cam_pix
         q = -t[2] / vec[2]
 
-        return (vec * q + t)[:2]
+        return (vec * q + t)[:2] * np.array([1, -1])
+    
+    def get_all_pitch_coordinates(self, pix):
+        return np.array([self.get_pitch_coordinates(p) for p in pix])
+
 
     def project_point2pixel(self, points3d: torch.tensor, lens_distortion: bool) -> torch.tensor:
         """Project world coordinates to pixel coordinates.
