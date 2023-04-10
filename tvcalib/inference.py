@@ -86,7 +86,8 @@ class InferenceSegmentationModel:
         self.model = deeplabv3_resnet101(
             num_classes=len(SoccerPitch.lines_classes) + 1, aux_loss=True
         )
-        self.model.load_state_dict(torch.load(checkpoint)["model"], strict=False)
+        self.model.load_state_dict(torch.load(
+            checkpoint, map_location=torch.device(self.device))["model"], strict=False)
         self.model.to(self.device)
         self.model.eval()
 
