@@ -1,16 +1,12 @@
 [tool.poetry]
 name = "tvcalib"
-version = "0.0.2"
+version = "0.0.3"
 description = "Module for getting camer transformations based on an image of a football pitch"
 authors = ["Henrich Hegedus <henrich@playerdata.com>"]
 readme = "README.md"
 license-file = "LICENSE"
-packages = [
-    { include = "tvcalib"},
-    {sn_segmentation = "sn_segmentation"},
-    {configs = "configs"},
-    {evaluation = "evaluation"},
-]
+package-dir = {"" = "src"}
+packages = ["tvcalib", "sn_segmentation"]
 
 [virtualenvs]
 in-project = true
