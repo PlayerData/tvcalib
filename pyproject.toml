@@ -7,6 +7,9 @@ readme = "README.md"
 license-file = "LICENSE"
 packages = [
     { include = "tvcalib"},
+    {sn_segmentation = "sn_segmentation"},
+    {configs = "configs"},
+    {evaluation = "evaluation"},
 ]
 
 [virtualenvs]
