@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tvcalib"
-version = "0.0.3"
+version = "0.1.3"
 description = "Module for getting camer transformations based on an image of a football pitch"
 authors = ["Henrich Hegedus <henrich@playerdata.com>"]
 readme = "README.md"
