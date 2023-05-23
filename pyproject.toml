@@ -5,18 +5,17 @@ description = "Module for getting camer transformations based on an image of a f
 authors = ["Henrich Hegedus <henrich@playerdata.com>"]
 readme = "README.md"
 license-file = "LICENSE"
-package-dir = {"" = "src"}
-packages = ["tvcalib", "sn_segmentation"]
+packages = [{ include = "tvcalib", from = "src" }, { include = "sn_segmentation", from = "src" }]
 
 [virtualenvs]
 in-project = true
 
 [tool.poetry.dependencies]
-python = ">=3.8,<=3.10"
+python = ">=3.8,<4.0"
 opencv-python = "=4.6.0.66"
 numpy = "*"
-torch = "1.11.0"
-torchvision = "0.12.0"
+torch = ">=1.11.0"
+torchvision = ">=0.12.0"
 pyyaml = "*"
 matplotlib = "*"
 pandas = "*"
